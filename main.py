@@ -1,5 +1,4 @@
 #reading excel requires openpyxl
-from dataclasses import dataclass
 from tabnanny import check
 import pandas as pd
 import re
@@ -10,10 +9,10 @@ from portmaster_lib import Portmaster_Lib as test
 from work_column_data import Work_Column_Data
 
 class Main :
- 
+    
 
 
-    excelFile = pd.ExcelFile(askopenfilename())
+    excelFile = pd.ExcelFile('example.xlsx')
     read = pd.read_excel(excelFile, excelFile.sheet_names[0])
     
 
@@ -66,4 +65,3 @@ class Main :
 
 
 
-    print(dataColumns)
