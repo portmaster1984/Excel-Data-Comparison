@@ -2,14 +2,16 @@ import pandas as pd
 import re
 from math import isnan
 from tkinter.filedialog import askopenfilename
-from portmaster_lib import Portmaster_Lib as test
 from packaging.version import parse
+import openpyxl as pxl
+from tkinter import Tk, filedialog
+import tkinter.messagebox as mes
 
 def isnumber(a) -> int :
         if isinstance(a, float) == True and isnan(a) == False or isinstance(a, int) :
             return True
 
-def findMaxColumnLength(list, versionColumn) -> int :
+def findMaxColumnLength(list, args = None) -> int :
     temp = list[0][0]
     maxLength = 0
     counter = 0
@@ -21,11 +23,15 @@ def findMaxColumnLength(list, versionColumn) -> int :
         temp = list[counter][0]
         counter +=1
     
-    if(len(versionColumn) > maxLength) :
-        maxLength = len(versionColumn)
+    if args is not None :
+        if(len(args) > maxLength) :
+            maxLength = len(args)
+    
     return maxLength
 
-def checkDataListing(columnHeaders: list, checkData: list, comparedData : list) -> list :
+def checkDataListing(columnHeaders: list, dataToBeCompared: list, againstThisData : list) -> list :
+   
+    
     list = []
     
     counter = 0
@@ -34,27 +40,49 @@ def checkDataListing(columnHeaders: list, checkData: list, comparedData : list) 
         list[counter].append([])
         list[counter].append([]) 
         list[counter].append([]) 
-        for c in reversed(checkData[x]):
-            comparedDataCounter = len(comparedData[x]) - 1
+        for c in reversed(dataToBeCompared[x]):
+            comparedDataCounter = len(againstThisData[x]) - 1
             
-            while(c != comparedData[x][comparedDataCounter] and comparedDataCounter >= 0) :
+            while(c != againstThisData[x][comparedDataCounter] and comparedDataCounter >= 0) :
                 comparedDataCounter -= 1
-
-            if c == comparedData[x][comparedDataCounter] :
+   
+                
+                
+            if c == againstThisData[x][comparedDataCounter] :
 
                 list[counter][0].append(c)
-                list[counter][1].append(comparedData[x][comparedDataCounter])
+                list[counter][1].append(againstThisData[x][comparedDataCounter])
                 list[counter][2].append(True)
-                comparedData[x].pop(comparedDataCounter)
+                againstThisData[x].pop(comparedDataCounter)
             else :
             
                 list[counter][0].append(c)
                 list[counter][1].append('NULL') 
                 list[counter][2].append(False)
 
+        list[counter][0].append('ERROR IF SHOWN REPORT')
+        list[counter][1].append('ERROR IF SHOWN REPORT')
+        list[counter][2].append('ERROR IF SHOWN REPORT')
         counter += 1
 
+    
+
     return list
+
+def checkEmptyListing(workList, dataList): #IGNORE THIS
+
+    emptyList = False
+    for x in workList:
+        if len(x) == 0:
+            emptyList = True
+    
+    for x in dataList:
+        if len(x) == 0:
+            emptyList = True
+    if emptyList:
+        mes.showerror('error', 'ONE OF YOUR COLUMNS WERE NOT FOUND IN EITHER SHEET. Check your listing! ')
+        raise ValueError('ERROR: ONE OF YOUR COLUMNS WERE NOT FOUND IN EITHER SHEET. Check your listing')
+    
 
 def populateFrame(df: pd.DataFrame, workHeaders: list, dfWorkList :list) -> None:
     counter = 0
@@ -72,30 +100,51 @@ def checkVersionOrder(columnVersionCheck) : # ERROR CHECK WHY FIRST ROW IS NOT S
             versionColumn.append(x)
 
     
-    v = [[],[]]
-    v[1].append("N/A")
+    versionList = [[],[]]
+    versionList[0].append("N/A")
+    versionList[1].append("N/A")
+    versionList[1].append("N/A")
     counter = 0
     for x in versionColumn[0:len(versionColumn) -1]:
  
-        v[0].append(x)
+        versionList[0].append(x)
         if(parse(x) < parse(versionColumn[counter + 1])):            
-            v[1].append(True)
+            versionList[1].append(True)
         else:
-            v[1].append(False)
+            versionList[1].append(False)
         counter +=1      
     
-    v[0].append(versionColumn[len(versionColumn) - 1])
-    return v 
+    versionList[0].append(versionColumn[len(versionColumn) - 1])
+    return versionList 
+
+def populateDataList(workHeaders, storedTempColumns):
+    dataColumns = {}
+    counter = 0
+    for x in workHeaders :
+        tempColumns = []
+        for c in storedTempColumns :
+            if (re.search(workHeaders[counter], str(c))):
+                
+                tempRow = str(c).replace((workHeaders[counter]+'_'),'')
+                tempSplit = tempRow.split('_')
+                if(str.isdigit(tempSplit[0])) :
+                    tempColumns.append(int(tempSplit[0]))
+                
+        dataColumns[workHeaders[counter]] = tempColumns 
+        counter += 1
+    
+    return dataColumns
 
 class Main :
-
-    excelFile = pd.ExcelFile('example.xlsx')
+    filename = askopenfilename()
+    excelFile = pd.ExcelFile(filename)
     read = pd.read_excel(excelFile, excelFile.sheet_names[0])
 
     #1------Stores each COLUMN HEADER and for each COLUMN HEADER store its entire COLUMN in a dict from Work Sheet-----
     #Version Column is processed and stored
     workHeaders = [x for x in read.columns]
     workHeaders.pop(0)
+
     storedTempColumns = []
     for x in workHeaders:
         storedTempColumns.append(read[x])
@@ -121,44 +170,66 @@ class Main :
     dataHeader = [x for x in read.columns]
     storedTempColumns = read[dataHeader[0]]
 
-    
-    dataColumns = {}
-    counter = 0
-    for x in workHeaders :
-        tempColumns = []
-        for c in storedTempColumns :
-            if (re.search(workHeaders[counter], str(c))):
-                
-                tempRow = str(c).replace((workHeaders[counter]+'_'),'')
-                tempSplit = tempRow.split('_')
-                if(str.isdigit(tempSplit[0])) :
-                    tempColumns.append(int(tempSplit[0]))
-                
-        dataColumns[workHeaders[counter]] = tempColumns 
-        counter += 1
-    
-    #4-------------------------------------END----------------------------------------------
-    
-    #5-----Check if stored worksheet is found in stored datasheet ------------------------------------------------------------------------------
-    dfWorkList = checkDataListing(workHeaders,workColumns, dataColumns)
 
+    dataColumns = populateDataList(workHeaders, storedTempColumns)
+    dataColumns2 = populateDataList(workHeaders, storedTempColumns)
+  
+    #3-------------------------------------END----------------------------------------------
+    
+    #5-----Check validation ------------------------------------------------------------------------------
+    dfWorkList = checkDataListing(workHeaders, workColumns, dataColumns)
+    dfDataList = checkDataListing(workHeaders, dataColumns2, workColumns)
     #5-------------------------------------END----------------------------------------------
     
-    #--------------------------------Output to Excel---------------------------------------
-    df = pd.DataFrame()
-   
-    df.index = range(1, findMaxColumnLength(dfWorkList, versionColumn[0]) + 1)
+    #6--------------------------------Output to Excel---------------------------------------
+    dfWorkSheet = pd.DataFrame()
+    dfWorkSheet.index = range(1, findMaxColumnLength(dfWorkList, args = versionColumn[0]) + 1)
 
+    #creates worksheet dataframe
+    counter = 0
+    while counter <= len(workHeaders) -1 :
+        dfWorkSheet[workHeaders[counter] + "_Worksheet"] = pd.Series(reversed(dfWorkList[counter][0]))
+        dfWorkSheet[workHeaders[counter] + "_Datasheet"] = pd.Series(reversed(dfWorkList[counter][1]))
+        dfWorkSheet[workHeaders[counter] + "_Match"] = pd.Series(reversed(dfWorkList[counter][2]))
+        counter += 1
+        
+    dfWorkSheet['Version'] = pd.Series(versionColumn[0])
+    dfWorkSheet['Checked'] = pd.Series(versionColumn[1])
+    
+
+    #creates datasheet dataframe
+    dfDataSheet = pd.DataFrame()
+    dfDataSheet.index = range(1, findMaxColumnLength(dfDataList) + 1)
 
     counter = 0
     while counter <= len(workHeaders) -1 :
-        df[workHeaders[counter] + "_Worksheet"] = pd.Series(reversed(dfWorkList[counter][0]))
-        df[workHeaders[counter] + "_Datasheet"] = pd.Series(reversed(dfWorkList[counter][1]))
-        df[workHeaders[counter] + "_Match"] = pd.Series(reversed(dfWorkList[counter][2]))
+        dfDataSheet[workHeaders[counter] + "_Datasheet"] = pd.Series(reversed(dfDataList[counter][0]))
+        dfDataSheet[workHeaders[counter] + "_WorkSheet"] = pd.Series(reversed(dfDataList[counter][1]))
+        dfDataSheet[workHeaders[counter] + "_Match"] = pd.Series(reversed(dfDataList[counter][2]))
         counter += 1
         
+
+    #create excel and append sheet
+    root = Tk() 
+    root.withdraw() 
+    root.attributes('-topmost', True) 
+    open_file = filedialog.askdirectory() + r"/"
+
+    fileOutput = 'output.xlsx'
+    dfWorkSheet.to_excel(open_file + fileOutput, sheet_name = "Work_form")
     
-    df['Version'] = pd.Series(versionColumn[0])
-    df['Checked'] = pd.Series(versionColumn[1])
-    df.to_excel('output2.xlsx', sheet_name = "Work")
-    #-------------------------------------END----------------------------------------------
+    ExcelWorkbook = pxl.load_workbook(open_file + fileOutput)
+    options = {}
+    options['strings_to_formulas'] = False
+    options['strings_to_urls'] = False
+    writer = pd.ExcelWriter(open_file + fileOutput, engine = 'openpyxl')
+    writer.book = ExcelWorkbook
+    dfDataSheet.to_excel(writer, sheet_name = "Data_form")
+
+    writer.close()
+
+    excel_book = pxl.load_workbook(open_file + fileOutput)
+
+    
+    
+    #6-------------------------------------END----------------------------------------------
